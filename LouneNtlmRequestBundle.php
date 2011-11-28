@@ -1,8 +1,8 @@
 <?php
-namespace Loune\NtlmBundle;
+namespace Loune\NtlmRequestBundle;
 
 use Symfony\Component\HttpKernel\Bundle\Bundle;
 
-class LouneNtlmBundle extends Bundle
+class LouneNtlmRequestBundle extends Bundle
 {
 }
