@@ -65,7 +65,7 @@ To use this library with samba, please read the instructions inside verifyntlm.c
 to compile the verifyntlm helper. Use the ntlm.php library as above but omit the
 get_ntlm_user_hash function and replace the ntlm_prompt line with this one:
 
-	$auth = ntlm_prompt("testwebsite", "testdomain", "mycomputer", "testdomain.local", "mycomputer.local", null, "$this->$this->ntlm_verify_hash_smb");
+	$auth = ntlm_prompt("testwebsite", "testdomain", "mycomputer", "testdomain.local", "mycomputer.local", null, "$this->ntlm_verify_hash_smb");
 
 For more, see http://siphon9.net/loune/2010/12/php-ntlm-integration-with-samba/
 
@@ -159,7 +159,7 @@ class LtlmRequest {
 		return ($blobhash == $clientblobhash);
 	}
 
-	protected function ntlm_parse_response_msg($msg, $challenge, $get_ntlm_user_hash_callback, $$this->ntlm_verify_hash_callback) {
+	protected function ntlm_parse_response_msg($msg, $challenge, $get_ntlm_user_hash_callback, $ntlm_verify_hash_callback) {
 		$user = $this->ntlm_field_value($msg, 36);
 		$domain = $this->ntlm_field_value($msg, 28);
 		$workstation = $this->ntlm_field_value($msg, 44);
@@ -170,7 +170,7 @@ class LtlmRequest {
 
 		// print bin2hex($msg)."<br>";
 
-		if (!$$this->ntlm_verify_hash_callback($challenge, $user, $domain, $workstation, $clientblobhash, $clientblob, $get_ntlm_user_hash_callback))
+		if (!$ntlm_verify_hash_callback($challenge, $user, $domain, $workstation, $clientblobhash, $clientblob, $get_ntlm_user_hash_callback))
 			return array('authenticated' => false, 'username' => $user, 'domain' => $domain, 'workstation' => $workstation);
 		return array('authenticated' => true, 'username' => $user, 'domain' => $domain, 'workstation' => $workstation);
 	}
@@ -179,7 +179,7 @@ class LtlmRequest {
 		unset ($_SESSION['_ntlm_auth']);
 	}
 
-	public function ntlm_prompt($targetname, $domain, $computer, $dnsdomain, $dnscomputer, $get_ntlm_user_hash_callback, $$this->ntlm_verify_hash_callback = '$this->ntlm_verify_hash', $failmsg = "<h1>Authentication Required</h1>") {
+	public function ntlm_prompt($targetname, $domain, $computer, $dnsdomain, $dnscomputer, $get_ntlm_user_hash_callback, $ntlm_verify_hash_callback = 'ntlm_verify_hash', $failmsg = "<h1>Authentication Required</h1>") {
 
 		$auth_header = isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION'] : null;
 		if ($auth_header == null && function_exists('apache_request_headers')) {
@@ -218,7 +218,7 @@ class LtlmRequest {
 				exit;
 			}
 			else if ($msg[8] == "\x03") {
-				$auth = $this->ntlm_parse_response_msg($msg, $_SESSION['_ntlm_server_challenge'], $get_ntlm_user_hash_callback, $$this->ntlm_verify_hash_callback);
+				$auth = $this->ntlm_parse_response_msg($msg, $_SESSION['_ntlm_server_challenge'], $get_ntlm_user_hash_callback, $ntlm_verify_hash_callback);
 				unset($_SESSION['_ntlm_server_challenge']);
 
 				if (!$auth['authenticated']) {
