@@ -1,0 +1,3 @@
+services:
+    ntlm.provider:
+      class: Loune\NtlmRequestBundle\Service\Ntlm
