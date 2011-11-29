@@ -1,6 +1,8 @@
 <?php
 namespace Loune\NtlmRequestBundle\Service;
 
+use Symfony\Component\DependencyInjection\ContainerInterface;
+
 //
 // I have adapted the code written by the author below to work as a Symfony2 Bundle - Elliot Coad
 //
@@ -71,8 +73,17 @@ For more, see http://siphon9.net/loune/2010/12/php-ntlm-integration-with-samba/
 
 */
 
-class LtlmRequest {
+class NtlmRequest {
+    /**
+     * @var ContainerInteface $container
+     */
+    protected $container;
+
 	protected $ntlm_verifyntlmpath = '/sbin/verifyntlm';
+
+	public function __construct(ContainerInterface $container) {
+		$this->container = $container;
+	}
 
 	protected function ntlm_utf8_to_utf16le($str) {
 		//$result = "";
@@ -82,7 +93,7 @@ class LtlmRequest {
 		return iconv('UTF-8', 'UTF-16LE', $str);
 	}
 
-	public function ntlm_md4($s) {
+	protected function ntlm_md4($s) {
 		if (function_exists('mhash'))
 			return mhash(MHASH_MD4, $s);
 		return pack('H*', hash('md4', $s));
@@ -98,6 +109,7 @@ class LtlmRequest {
 		$result = substr($msg, $off, $len);
 		if ($decode_utf16) {
 			//$result = str_replace("\0", '', $result);
+			$originalResult = $result;
 			$result = iconv('UTF-16LE', 'UTF-8', $result);
 		}
 		return $result;
@@ -140,7 +152,7 @@ class LtlmRequest {
 
 	protected function ntlm_verify_hash($challenge, $user, $domain, $workstation, $clientblobhash, $clientblob, $get_ntlm_user_hash) {
 
-		$md4hash = $get_ntlm_user_hash($user);
+		$md4hash = $this->$get_ntlm_user_hash($user);
 		if (!$md4hash)
 			return false;
 		$ntlmv2hash = $this->ntlm_hmac_md5($md4hash, $this->ntlm_utf8_to_utf16le(strtoupper($user).$domain));
@@ -170,14 +182,24 @@ class LtlmRequest {
 
 		// print bin2hex($msg)."<br>";
 
-		if (!$ntlm_verify_hash_callback($challenge, $user, $domain, $workstation, $clientblobhash, $clientblob, $get_ntlm_user_hash_callback))
+		if (!$this->$ntlm_verify_hash_callback($challenge, $user, $domain, $workstation, $clientblobhash, $clientblob, $get_ntlm_user_hash_callback))
 			return array('authenticated' => false, 'username' => $user, 'domain' => $domain, 'workstation' => $workstation);
 		return array('authenticated' => true, 'username' => $user, 'domain' => $domain, 'workstation' => $workstation);
 	}
 
 	protected function ntlm_unset_auth() {
-		unset ($_SESSION['_ntlm_auth']);
+		//unset ($_SESSION['_ntlm_auth']);
+		$this->container->get('session')->set('_ntlm_auth', null);
 	}
+
+    protected function get_ntlm_user_hash($user) {
+    	//var_dump($user); exit;
+        $userdb = array('rdp'=>'rdp');
+
+        if (!isset($userdb[strtolower($user)]))
+            return false;
+        return $this->ntlm_md4($this->ntlm_utf8_to_utf16le($userdb[strtolower($user)]));
+    }
 
 	public function ntlm_prompt($targetname, $domain, $computer, $dnsdomain, $dnscomputer, $get_ntlm_user_hash_callback, $ntlm_verify_hash_callback = 'ntlm_verify_hash', $failmsg = "<h1>Authentication Required</h1>") {
 
@@ -187,8 +209,11 @@ class LtlmRequest {
 			$auth_header = isset($headers['Authorization']) ? $headers['Authorization'] : null;
 		}
 
-		if (isset($_SESSION['_ntlm_auth']))
-			return $_SESSION['_ntlm_auth'];
+		//if (isset($_SESSION['_ntlm_auth']))
+		//	return $_SESSION['_ntlm_auth'];
+
+		if ($this->container->get('session')->get('_ntlm_auth'))
+			return $this->container->get('session')->get('_ntlm_auth');
 
 		// post data retention, looks like not needed
 		/*if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -205,27 +230,34 @@ class LtlmRequest {
 		if (substr($auth_header,0,5) == 'NTLM ') {
 			$msg = base64_decode(substr($auth_header, 5));
 			if (substr($msg, 0, 8) != "NTLMSSP\x00") {
-				unset($_SESSION['_ntlm_post_data']);
+				//unset($_SESSION['_ntlm_post_data']);
+				$this->container->get('session')->set('_ntlm_post_data', null);
 				die('NTLM error header not recognised');
 			}
 
 			if ($msg[8] == "\x01") {
-				$_SESSION['_ntlm_server_challenge'] = $this->ntlm_get_random_bytes(8);
+				//$_SESSION['_ntlm_server_challenge'] = $this->ntlm_get_random_bytes(8);
+				$this->container->get('session')->set('_ntlm_server_challenge', $this->ntlm_get_random_bytes(8));
+
 				header('HTTP/1.1 401 Unauthorized');
-				$msg2 = $this->ntlm_get_challenge_msg($msg, $_SESSION['_ntlm_server_challenge'], $targetname, $domain, $computer, $dnsdomain, $dnscomputer);
+				//$msg2 = $this->ntlm_get_challenge_msg($msg, $_SESSION['_ntlm_server_challenge'], $targetname, $domain, $computer, $dnsdomain, $dnscomputer);
+				$msg2 = $this->ntlm_get_challenge_msg($msg, $this->container->get('session')->get('_ntlm_server_challenge'), $targetname, $domain, $computer, $dnsdomain, $dnscomputer);
 				header('WWW-Authenticate: NTLM '.trim(base64_encode($msg2)));
 				//print bin2hex($msg2);
 				exit;
 			}
 			else if ($msg[8] == "\x03") {
-				$auth = $this->ntlm_parse_response_msg($msg, $_SESSION['_ntlm_server_challenge'], $get_ntlm_user_hash_callback, $ntlm_verify_hash_callback);
-				unset($_SESSION['_ntlm_server_challenge']);
+				//$auth = $this->ntlm_parse_response_msg($msg, $_SESSION['_ntlm_server_challenge'], $get_ntlm_user_hash_callback, $ntlm_verify_hash_callback);
+				$auth = $this->ntlm_parse_response_msg($msg, $this->container->get('session')->get('_ntlm_server_challenge'), $get_ntlm_user_hash_callback, $ntlm_verify_hash_callback);
+
+				//unset($_SESSION['_ntlm_server_challenge']);
+				$this->container->get('session')->set('_ntlm_server_challenge', null);
 
 				if (!$auth['authenticated']) {
 					header('HTTP/1.1 401 Unauthorized');
 					header('WWW-Authenticate: NTLM');
 					//unset($_SESSION['_ntlm_post_data']);
-					print $failmsg;
+					var_dump('authpoint'); exit;
 					exit;
 				}
 
@@ -239,10 +271,10 @@ class LtlmRequest {
 					unset($_SESSION['_ntlm_post_data']);
 				}*/
 
-				$_SESSION['_ntlm_auth'] = $auth;
-				return $auth;
+				//$_SESSION['_ntlm_auth'] = $auth;
+				$this->container->get('session')->set('_ntlm_auth', $auth);
+				return $auth['username'];
 			}
 		}
 	}
-
 }

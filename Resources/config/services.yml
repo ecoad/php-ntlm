@@ -1,3 +1,4 @@
 services:
-    ntlm.provider:
-      class: Loune\NtlmRequestBundle\Service\Ntlm
+    ntlm.request:
+      class: Loune\NtlmRequestBundle\Service\NtlmRequest
+      arguments: [@service_container]
