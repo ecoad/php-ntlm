@@ -112,7 +112,7 @@ class NtlmRequest {
 			$originalResult = $result;
 			$result = iconv('UTF-16LE', 'UTF-8', $result);
 		}
-		return $result;
+			return $result;
 	}
 
 	protected function ntlm_hmac_md5($key, $msg) {
@@ -212,8 +212,10 @@ class NtlmRequest {
 		//if (isset($_SESSION['_ntlm_auth']))
 		//	return $_SESSION['_ntlm_auth'];
 
-		if ($this->container->get('session')->get('_ntlm_auth'))
-			return $this->container->get('session')->get('_ntlm_auth');
+		if ($this->container->get('session')->get('_ntlm_auth')) {
+			$auth = $this->container->get('session')->get('_ntlm_auth');
+			return $auth['username'];
+		}
 
 		// post data retention, looks like not needed
 		/*if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -257,7 +259,6 @@ class NtlmRequest {
 					header('HTTP/1.1 401 Unauthorized');
 					header('WWW-Authenticate: NTLM');
 					//unset($_SESSION['_ntlm_post_data']);
-					var_dump('authpoint'); exit;
 					exit;
 				}
 
