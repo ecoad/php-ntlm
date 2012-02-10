@@ -152,23 +152,20 @@ class NtlmRequest {
 
 	protected function ntlm_verify_hash($challenge, $user, $domain, $workstation, $clientblobhash, $clientblob, $get_ntlm_user_hash) {
 
-		$md4hash = $this->$get_ntlm_user_hash($user);
-		if (!$md4hash)
-			return false;
-		$ntlmv2hash = $this->ntlm_hmac_md5($md4hash, $this->ntlm_utf8_to_utf16le(strtoupper($user).$domain));
-		$blobhash = $this->ntlm_hmac_md5($ntlmv2hash, $challenge.$clientblob);
+		$logger = $this->container->get('logger');
+		$logger->info('NTLM header username: "' . $user .'"');
+		if ($user = $this->container->get('user.provider')->loadUserByUsername($user)) {
+			return true;
+			/*
+			$ldapUser = $this->container->get('user.providerldap')->loadUserByUsernamePassword($user->getUsername(), 
+				$user->getPassword());
+			if ($ldapUser) {
+			}
+			*/
+		}
 
-		/* print $domain ."<br>";
-		print $user ."<br>";
-		print bin2hex($challenge )."<br>";
-		print bin2hex($clientblob )."<br>";
-		print bin2hex($_SESSION['tdata'])."<br>";
-		print bin2hex($clientblobhash )."<br>";
-		print bin2hex($md4hash )."<br>";
-		print bin2hex($ntlmv2hash)."<br>";
-		print bin2hex($blobhash)."<br>"; die; */
+		return false;
 
-		return ($blobhash == $clientblobhash);
 	}
 
 	protected function ntlm_parse_response_msg($msg, $challenge, $get_ntlm_user_hash_callback, $ntlm_verify_hash_callback) {
@@ -191,15 +188,6 @@ class NtlmRequest {
 		//unset ($_SESSION['_ntlm_auth']);
 		$this->container->get('session')->set('_ntlm_auth', null);
 	}
-
-    protected function get_ntlm_user_hash($user) {
-    	//var_dump($user); exit;
-        $userdb = array('rdp'=>'rdp');
-
-        if (!isset($userdb[strtolower($user)]))
-            return false;
-        return $this->ntlm_md4($this->ntlm_utf8_to_utf16le($userdb[strtolower($user)]));
-    }
 
 	public function ntlm_prompt($targetname, $domain, $computer, $dnsdomain, $dnscomputer, $get_ntlm_user_hash_callback, $ntlm_verify_hash_callback = 'ntlm_verify_hash', $failmsg = "<h1>Authentication Required</h1>") {
 
