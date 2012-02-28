@@ -61,16 +61,6 @@ To logout, use the code:
 
 	$this->ntlm_unset_auth();
 
-SAMBA
------
-To use this library with samba, please read the instructions inside verifyntlm.c
-to compile the verifyntlm helper. Use the ntlm.php library as above but omit the
-get_ntlm_user_hash function and replace the ntlm_prompt line with this one:
-
-	$auth = ntlm_prompt("testwebsite", "testdomain", "mycomputer", "testdomain.local", "mycomputer.local", null, "$this->ntlm_verify_hash_smb");
-
-For more, see http://siphon9.net/loune/2010/12/php-ntlm-integration-with-samba/
-
 */
 
 class NtlmRequest {
@@ -179,8 +169,9 @@ class NtlmRequest {
 
 		// print bin2hex($msg)."<br>";
 
-		if (!$this->$ntlm_verify_hash_callback($challenge, $user, $domain, $workstation, $clientblobhash, $clientblob, $get_ntlm_user_hash_callback))
+		if (!$this->$ntlm_verify_hash_callback($challenge, $user, $domain, $workstation, $clientblobhash, $clientblob, $get_ntlm_user_hash_callback)) {
 			throw new \Symfony\Component\Security\Core\Exception\AuthenticationException('NTLM hash failed');
+		}
 		return array('authenticated' => true, 'username' => $user, 'domain' => $domain, 'workstation' => $workstation);
 	}
 
@@ -213,12 +204,7 @@ class NtlmRequest {
 		if (!$auth_header) {
 			header('HTTP/1.1 401 Unauthorized');
 			header('WWW-Authenticate: NTLM');
-			// If the NTLM authentication fails, display the login form
-			$securityController = $this->container->get('ntlm.securityController');
-			$securityController->setContainer($this->container);
-			$response = $securityController->loginAction();
-			//$response->sendHeaders();
-			$response->sendContent();
+			echo $failmsg;
 			exit;
 		}
 
@@ -255,17 +241,6 @@ class NtlmRequest {
 					exit;
 				}
 
-				// post data retention looks like not needed
-				/*if (isset($_SESSION['_ntlm_post_data'])) {
-					foreach ($_SESSION['_ntlm_post_data'] as $k => $v) {
-						$_REQUEST[$k] = $v;
-						$_POST[$k] = $v;
-					}
-					$_SERVER['REQUEST_METHOD'] = 'POST';
-					unset($_SESSION['_ntlm_post_data']);
-				}*/
-
-				//$_SESSION['_ntlm_auth'] = $auth;
 				$this->container->get('session')->set('_ntlm_auth', $auth);
 				return $auth['username'];
 			}
