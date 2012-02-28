@@ -151,21 +151,21 @@ class NtlmRequest {
 	}
 
 	protected function ntlm_verify_hash($challenge, $user, $domain, $workstation, $clientblobhash, $clientblob, $get_ntlm_user_hash) {
-
 		$logger = $this->container->get('logger');
 		$logger->info('NTLM header username: "' . $user .'"');
-		if ($user = $this->container->get('user.provider')->loadUserByUsername($user)) {
-			return true;
-			/*
-			$ldapUser = $this->container->get('user.providerldap')->loadUserByUsernamePassword($user->getUsername(), 
-				$user->getPassword());
-			if ($ldapUser) {
-			}
-			*/
+		$userProvider = $this->container->get('user.provider');
+
+		if (!$user = $userProvider->loadUserByUsername($user)) {
+			return false;
 		}
 
-		return false;
+		$password = $userProvider->decryptPassword($user->getPassword());
+		$md4hash = $this->ntlm_md4($this->ntlm_utf8_to_utf16le($password));
 
+		$ntlmv2hash = $this->ntlm_hmac_md5($md4hash, $this->ntlm_utf8_to_utf16le(strtoupper($user->getUsername()).$domain));
+		$blobhash = $this->ntlm_hmac_md5($ntlmv2hash, $challenge.$clientblob);
+
+		return ($blobhash == $clientblobhash);
 	}
 
 	protected function ntlm_parse_response_msg($msg, $challenge, $get_ntlm_user_hash_callback, $ntlm_verify_hash_callback) {
@@ -180,7 +180,7 @@ class NtlmRequest {
 		// print bin2hex($msg)."<br>";
 
 		if (!$this->$ntlm_verify_hash_callback($challenge, $user, $domain, $workstation, $clientblobhash, $clientblob, $get_ntlm_user_hash_callback))
-			return array('authenticated' => false, 'username' => $user, 'domain' => $domain, 'workstation' => $workstation);
+			throw new \Symfony\Component\Security\Core\Exception\AuthenticationException('NTLM hash failed');
 		return array('authenticated' => true, 'username' => $user, 'domain' => $domain, 'workstation' => $workstation);
 	}
 
@@ -213,7 +213,12 @@ class NtlmRequest {
 		if (!$auth_header) {
 			header('HTTP/1.1 401 Unauthorized');
 			header('WWW-Authenticate: NTLM');
-			print $failmsg;
+			// If the NTLM authentication fails, display the login form
+			$securityController = $this->container->get('ntlm.securityController');
+			$securityController->setContainer($this->container);
+			$response = $securityController->loginAction();
+			//$response->sendHeaders();
+			$response->sendContent();
 			exit;
 		}
 
